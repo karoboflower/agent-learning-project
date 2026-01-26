@@ -1,0 +1,28 @@
+# 环境变量文件（包含敏感信息）
+.env*
+.env.*
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript
+*.tsbuildinfo
+dist/
+*.js.map
+
+# 生成的项目
+generated-todo-app/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
