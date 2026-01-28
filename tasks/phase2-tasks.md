@@ -3,7 +3,7 @@
 ## 任务2.1：前端Agent应用 - 智能代码助手（Week 1-2）
 
 ### 项目目标
-构建一个基于React/Vue的智能代码助手Agent，能够进行代码审查、重构建议和技术栈选择。
+构建一个基于Vue的智能代码助手Agent，能够进行代码审查、重构建议和技术栈选择。
 
 ### 功能需求
 - [ ] 代码审查和建议
@@ -12,7 +12,7 @@
 - [ ] 代码质量评估
 
 ### 技术栈
-- React/Vue 3 + TypeScript
+- Vue 3 + TypeScript
 - LangChain.js
 - OpenAI API / Claude API
 - Web Workers（后台处理）

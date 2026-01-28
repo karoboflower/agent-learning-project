@@ -1,0 +1,24 @@
+# 依赖
+node_modules/
+dist/
+build/
+*.log
+
+# 环境变量
+.env
+.env.local
+
+# 编辑器
+.DS_Store
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# 测试
+coverage/
+
+# Go
+*.exe
+*.test
+*.out
+vendor/
