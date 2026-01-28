@@ -1,0 +1,30 @@
+{
+  "name": "react-agent-example",
+  "version": "1.0.0",
+  "description": "ReAct (Reasoning + Acting) Agent implementation with real LLM",
+  "main": "react-agent.ts",
+  "scripts": {
+    "dev": "ts-node react-agent.ts",
+    "build": "tsc",
+    "start": "node dist/react-agent.js"
+  },
+  "keywords": [
+    "agent",
+    "react",
+    "reasoning",
+    "acting",
+    "llm",
+    "tool-use"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "dotenv": "^17.2.3"
+  }
+}

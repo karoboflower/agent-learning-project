@@ -1,0 +1,29 @@
+{
+  "name": "proactive-agent-example",
+  "version": "1.0.0",
+  "description": "Proactive Agent implementation example",
+  "main": "typescript-proactive-agent.ts",
+  "scripts": {
+    "dev": "ts-node typescript-proactive-agent.ts",
+    "build": "tsc",
+    "start": "node dist/typescript-proactive-agent.js"
+  },
+  "keywords": [
+    "agent",
+    "proactiveness",
+    "goal-driven",
+    "opportunity",
+    "prediction"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "dotenv": "^17.2.3"
+  }
+}

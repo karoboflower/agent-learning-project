@@ -1,0 +1,28 @@
+{
+  "name": "reactive-agent-example",
+  "version": "1.0.0",
+  "description": "Reactive Agent implementation example",
+  "main": "typescript-reactive-agent.ts",
+  "scripts": {
+    "dev": "ts-node typescript-reactive-agent.ts",
+    "build": "tsc",
+    "start": "node dist/typescript-reactive-agent.js"
+  },
+  "keywords": [
+    "agent",
+    "reactivity",
+    "event-driven",
+    "sensors"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "dotenv": "^17.2.3"
+  }
+}

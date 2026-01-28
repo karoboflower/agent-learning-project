@@ -927,7 +927,7 @@ Agent的自主性是其核心特征之一，它使得Agent能够：
 ---
 
 **下一步学习**：
-- [ ] 学习Agent的反应性（Reactivity）
-- [ ] 学习Agent的主动性（Proactiveness）
-- [ ] 学习Agent的社会性（Social Ability）
-- [ ] 实践构建自主Agent
+- [x] 学习Agent的反应性（Reactivity） - [查看笔记](./agent-reactivity.md)
+- [x] 学习Agent的主动性（Proactiveness） - [查看笔记](./agent-proactiveness.md)
+- [x] 学习Agent的社会性（Social Ability） - [查看笔记](./agent-social-ability.md)
+- [ ] 实践构建完整的多Agent系统

@@ -11,12 +11,15 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import Anthropic from "@anthropic-ai/sdk";
 
 // 加载环境变量
 import * as dotenv from "dotenv";
 dotenv.config();
 console.log("process.env:", process.env);
-console.log("process.env.GEMINI_API_KEY:", process.env.GEMINI_API_KEY);
+const apiKey = process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN;
+console.log("process.env.ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN:", apiKey ? "已配置" : "未配置");
+console.log("process.env.ANTHROPIC_BASE_URL:", process.env.ANTHROPIC_BASE_URL || "使用默认");
 // ==================== 类型定义 ====================
 
 interface Task {
@@ -83,70 +86,75 @@ interface LLMService {
   ): Promise<{ tool: string; parameters: Record<string, any> }>;
 }
 
-// ==================== OpenAI LLM服务实现 ====================
+// ==================== Claude LLM服务实现 ====================
 
-class OpenAILLMService implements LLMService {
-  private apiKey: string;
-  private model: string;
-  private baseURL?: string;
+class ClaudeLLMService implements LLMService {
+  private client: Anthropic;
+  private modelName: string;
 
   constructor(
-    apiKey: string,
-    model: string = "gpt-3.5-turbo",
+    apiKey: string = "",
+    model: string = "claude-3-5-sonnet-20241022",
     baseURL?: string,
   ) {
-    this.apiKey = apiKey;
-    this.model = model;
-    this.baseURL = baseURL;
+    // API key 从环境变量 ANTHROPIC_API_KEY 或 ANTHROPIC_AUTH_TOKEN 自动获取
+    // 支持自定义 baseURL (例如中转服务)
+    const finalApiKey = apiKey || process.env.ANTHROPIC_AUTH_TOKEN;
+    const finalBaseURL = baseURL || process.env.ANTHROPIC_BASE_URL;
+    console.log("ClaudeLLMService 使用的 API Key:", finalApiKey);
+    console.log("ClaudeLLMService 使用的 Base URL:", finalBaseURL || "默认");
+    this.client = new Anthropic({
+      authToken: finalApiKey,
+      baseURL: finalBaseURL,
+    });
+    this.modelName = model;
   }
+
   async generate(
     prompt: string,
     options?: { temperature?: number; maxTokens?: number },
   ): Promise<string> {
-    console.log(this.apiKey);
-
     const maxRetries = 3;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
-        const response = await fetch(
-          this.baseURL || "https://api.openai.com/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${this.apiKey}`,
+        const response = await this.client.messages.create({
+          model: this.modelName,
+          max_tokens: options?.maxTokens || 1000,
+          temperature: options?.temperature || 0.7,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
             },
-            body: JSON.stringify({
-              model: this.model,
-              messages: [{ role: "user", content: prompt }],
-              temperature: options?.temperature || 0.7,
-              max_tokens: options?.maxTokens || 1000,
-            }),
-          },
-        );
+          ],
+        });
+        console.log("Claude API prompt:", prompt);
 
-        if (response.status === 429) {
+        // 从响应中提取文本内容
+        const content = response.content[0];
+        const text = content.type === "text" ? content.text : "";
+
+        console.log(`✅ LLM 响应成功: ${text.substring(0, 100)}...`);
+        return text;
+      } catch (error: any) {
+        console.error(`❌ 尝试 ${attempt + 1}/${maxRetries} 失败:`, error);
+
+        // 处理需要重试的错误：速率限制(429)、服务过载(529)
+        const shouldRetry =
+          error?.status === 429 ||
+          error?.status === 529 ||
+          error?.message?.includes("429") ||
+          error?.message?.includes("529") ||
+          error?.message?.includes("overloaded") ||
+          error?.message?.includes("rate_limit");
+
+        if (shouldRetry && attempt < maxRetries - 1) {
           const waitTime = Math.pow(2, attempt) * 1000;
-          if (attempt < maxRetries - 1) {
-            await this.sleep(waitTime);
-            continue;
-          }
+          console.log(`⏳ 服务繁忙，等待 ${waitTime}ms 后重试...`);
+          await this.sleep(waitTime);
+          continue;
         }
 
-        if (!response.ok) {
-          throw new Error(
-            `OpenAI API error: ${response.status} ${response.statusText}`,
-          );
-        }
-
-        const data = (await response.json()) as {
-          choices: Array<{ message?: { content?: string } }>;
-        };
-        const content = data.choices[0]?.message?.content;
-        console.log(`LLM Response: ${content}`);
-        return  content || "";
-      } catch (error) {
-        console.log(error);
         if (attempt === maxRetries - 1) {
           console.warn("⚠️  LLM调用失败，使用模拟响应");
           return this.getMockResponse(prompt);
@@ -1365,15 +1373,30 @@ async function example() {
 
   // 创建LLM服务
   // ⚠️ 安全提示：API密钥通过环境变量传递，不要硬编码在代码中
-  const apiKey = process.env.GEMINI_API_KEY || "your-api-key-here";
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || "your-api-key-here";
   if (apiKey === "your-api-key-here") {
-    console.error("❌ 错误：请设置 GEMINI_API_KEY 环境变量");
-    console.error("   方式1：创建 .env 文件并添加 GEMINI_API_KEY=your-key");
-    console.error("   方式2：运行前执行：export GEMINI_API_KEY=your-key");
+    console.error("❌ 错误：请设置 ANTHROPIC_API_KEY 或 ANTHROPIC_AUTH_TOKEN 环境变量");
+    console.error("   方式1：创建 .env 文件并添加:");
+    console.error("          ANTHROPIC_API_KEY=your-key");
+    console.error("          或 ANTHROPIC_AUTH_TOKEN=your-key");
+    console.error("   方式2：运行前执行：export ANTHROPIC_API_KEY=your-key");
+    console.error("   方式3：使用自定义 API 端点，同时设置:");
+    console.error("          ANTHROPIC_AUTH_TOKEN=your-token");
+    console.error("          ANTHROPIC_BASE_URL=https://your-api-endpoint/api");
     process.exit(1);
   }
-  console.log("apiKey:", apiKey);
-  const llm = new OpenAILLMService(apiKey, "gpt-3.5-turbo");
+  console.log("✅ API Key 已配置");
+
+  // 可用的 Claude 模型:
+  // - claude-3-5-sonnet-20241022 (推荐，最新的Claude 3.5 Sonnet)
+  // - claude-3-opus-20240229 (最强大的推理能力)
+  // - claude-3-sonnet-20240229 (平衡性能和速度)
+  // - claude-3-haiku-20240307 (最快速且经济)
+  const llm = new ClaudeLLMService(
+    apiKey,
+    "claude-3-5-sonnet-20241022",
+    process.env.ANTHROPIC_BASE_URL // 支持自定义 API 端点
+  );
 
   // 创建Agent
   const agent = new RealAutonomousAgent(
@@ -1434,4 +1457,4 @@ if (require.main === module) {
   });
 }
 
-export { RealAutonomousAgent, OpenAILLMService, LLMService, Tool, AgentState };
+export { RealAutonomousAgent, ClaudeLLMService, LLMService, Tool, AgentState };
