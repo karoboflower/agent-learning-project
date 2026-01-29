@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Agent 协作系统</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 导航栏 -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>🤖 Multi-Agent 协作系统</h1>
+            </div>
+            <div class="nav-status">
+                <span class="status-indicator" id="wsStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text">未连接</span>
+                </span>
+            </div>
+        </nav>
+
+        <!-- 标签页导航 -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="agents">Agent管理</button>
+            <button class="tab-btn" data-tab="tasks">任务监控</button>
+            <button class="tab-btn" data-tab="results">结果展示</button>
+        </div>
+
+        <!-- Agent管理页面 -->
+        <div class="tab-content active" id="agents">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Agent列表</h2>
+                    <div class="panel-actions">
+                        <button class="btn btn-primary" id="registerAgentBtn">注册新Agent</button>
+                        <button class="btn btn-secondary" id="refreshAgentsBtn">刷新</button>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="stats-cards">
+                        <div class="stat-card">
+                            <div class="stat-label">总Agent数</div>
+                            <div class="stat-value" id="totalAgents">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">活跃Agent</div>
+                            <div class="stat-value" id="activeAgents">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">空闲Agent</div>
+                            <div class="stat-value" id="idleAgents">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">离线Agent</div>
+                            <div class="stat-value" id="offlineAgents">0</div>
+                        </div>
+                    </div>
+                    <table class="data-table" id="agentTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>名称</th>
+                                <th>状态</th>
+                                <th>能力</th>
+                                <th>负载</th>
+                                <th>任务数</th>
+                                <th>最后心跳</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="agentTableBody">
+                            <tr class="empty-row">
+                                <td colspan="8">暂无Agent数据</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 任务监控页面 -->
+        <div class="tab-content" id="tasks">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>任务列表</h2>
+                    <div class="panel-actions">
+                        <button class="btn btn-primary" id="createTaskBtn">创建任务</button>
+                        <button class="btn btn-secondary" id="refreshTasksBtn">刷新</button>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="stats-cards">
+                        <div class="stat-card">
+                            <div class="stat-label">总任务数</div>
+                            <div class="stat-value" id="totalTasks">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">待分配</div>
+                            <div class="stat-value" id="pendingTasks">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">执行中</div>
+                            <div class="stat-value" id="runningTasks">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">已完成</div>
+                            <div class="stat-value" id="completedTasks">0</div>
+                        </div>
+                    </div>
+
+                    <!-- 任务分配可视化 -->
+                    <div class="visualization-panel">
+                        <h3>任务分配可视化</h3>
+                        <div id="taskAllocationChart" class="chart-container">
+                            <!-- 图表将通过JS渲染 -->
+                        </div>
+                    </div>
+
+                    <table class="data-table" id="taskTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>类型</th>
+                                <th>状态</th>
+                                <th>优先级</th>
+                                <th>分配给</th>
+                                <th>进度</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="taskTableBody">
+                            <tr class="empty-row">
+                                <td colspan="8">暂无任务数据</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 结果展示页面 -->
+        <div class="tab-content" id="results">
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>结果列表</h2>
+                    <div class="panel-actions">
+                        <button class="btn btn-secondary" id="refreshResultsBtn">刷新</button>
+                        <button class="btn btn-secondary" id="exportResultsBtn">导出结果</button>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="stats-cards">
+                        <div class="stat-card">
+                            <div class="stat-label">总结果数</div>
+                            <div class="stat-value" id="totalResults">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">已验证</div>
+                            <div class="stat-value" id="validatedResults">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">已聚合</div>
+                            <div class="stat-value" id="aggregatedResults">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">平均置信度</div>
+                            <div class="stat-value" id="avgConfidence">0%</div>
+                        </div>
+                    </div>
+
+                    <!-- 结果对比视图 -->
+                    <div class="result-comparison">
+                        <h3>结果对比</h3>
+                        <div class="comparison-selector">
+                            <label>选择任务:</label>
+                            <select id="taskSelector" class="form-select">
+                                <option value="">-- 选择任务 --</option>
+                            </select>
+                            <button class="btn btn-primary" id="compareBtn">对比结果</button>
+                        </div>
+                        <div id="comparisonView" class="comparison-container">
+                            <p class="empty-message">请选择任务查看结果对比</p>
+                        </div>
+                    </div>
+
+                    <table class="data-table" id="resultTable">
+                        <thead>
+                            <tr>
+                                <th>结果ID</th>
+                                <th>任务ID</th>
+                                <th>Agent</th>
+                                <th>状态</th>
+                                <th>分数</th>
+                                <th>置信度</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultTableBody">
+                            <tr class="empty-row">
+                                <td colspan="8">暂无结果数据</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模态框：注册Agent -->
+    <div class="modal" id="registerAgentModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>注册新Agent</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="registerAgentForm">
+                    <div class="form-group">
+                        <label>Agent ID *</label>
+                        <input type="text" name="id" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>名称 *</label>
+                        <input type="text" name="name" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>能力（逗号分隔）*</label>
+                        <input type="text" name="capabilities" class="form-control"
+                               placeholder="例如: code_review, testing, analysis" required>
+                    </div>
+                    <div class="form-group">
+                        <label>最大任务数</label>
+                        <input type="number" name="maxTasks" class="form-control" value="5">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelRegisterBtn">取消</button>
+                <button class="btn btn-primary" id="submitRegisterBtn">注册</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模态框：创建任务 -->
+    <div class="modal" id="createTaskModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>创建新任务</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="createTaskForm">
+                    <div class="form-group">
+                        <label>任务ID *</label>
+                        <input type="text" name="id" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>任务类型 *</label>
+                        <select name="type" class="form-select" required>
+                            <option value="code_review">代码审查</option>
+                            <option value="testing">测试</option>
+                            <option value="analysis">分析</option>
+                            <option value="research">研究</option>
+                            <option value="documentation">文档</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>优先级 *</label>
+                        <input type="number" name="priority" class="form-control" value="5" min="1" max="10">
+                    </div>
+                    <div class="form-group">
+                        <label>描述</label>
+                        <textarea name="description" class="form-control" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>所需能力（逗号分隔）</label>
+                        <input type="text" name="capabilities" class="form-control">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelCreateBtn">取消</button>
+                <button class="btn btn-primary" id="submitCreateBtn">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模态框：查看详情 -->
+    <div class="modal" id="detailModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="detailModalTitle">详情</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre id="detailModalContent" class="detail-content"></pre>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary modal-close">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载脚本 -->
+    <script src="/js/websocket.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
