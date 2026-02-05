@@ -1,0 +1,159 @@
+syntax = "proto3";
+
+package tenant;
+
+option go_package = "github.com/agent-learning/enterprise-platform/proto/tenant";
+
+import "google/protobuf/timestamp.proto";
+
+// 租户服务定义
+service TenantService {
+  // 创建租户
+  rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
+
+  // 获取租户
+  rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
+
+  // 更新租户配额
+  rpc UpdateTenantQuota(UpdateTenantQuotaRequest) returns (UpdateTenantQuotaResponse);
+
+  // 获取租户使用情况
+  rpc GetTenantUsage(GetTenantUsageRequest) returns (GetTenantUsageResponse);
+
+  // 更新租户功能
+  rpc UpdateTenantFeatures(UpdateTenantFeaturesRequest) returns (UpdateTenantFeaturesResponse);
+
+  // 检查配额
+  rpc CheckQuota(CheckQuotaRequest) returns (CheckQuotaResponse);
+}
+
+// 租户计划
+enum TenantPlan {
+  TENANT_PLAN_UNKNOWN = 0;
+  TENANT_PLAN_FREE = 1;             // 免费版
+  TENANT_PLAN_STARTER = 2;          // 入门版
+  TENANT_PLAN_PRO = 3;              // 专业版
+  TENANT_PLAN_ENTERPRISE = 4;       // 企业版
+}
+
+// 租户状态
+enum TenantStatus {
+  TENANT_STATUS_UNKNOWN = 0;
+  TENANT_STATUS_ACTIVE = 1;         // 激活
+  TENANT_STATUS_SUSPENDED = 2;      // 暂停
+  TENANT_STATUS_CANCELLED = 3;      // 已取消
+}
+
+// 租户配额
+message TenantQuota {
+  int32 max_users = 1;              // 最大用户数
+  int32 max_agents = 2;             // 最大Agent数
+  int64 max_tokens_per_month = 3;   // 每月最大Token数
+  int64 max_storage_bytes = 4;      // 最大存储空间（字节）
+  int32 max_concurrent_tasks = 5;   // 最大并发任务数
+  int32 max_api_calls_per_minute = 6; // 每分钟最大API调用数
+}
+
+// 租户使用情况
+message TenantUsage {
+  int32 current_users = 1;
+  int32 current_agents = 2;
+  int64 tokens_used_this_month = 3;
+  int64 storage_used_bytes = 4;
+  int32 active_tasks = 5;
+  int32 api_calls_this_minute = 6;
+  google.protobuf.Timestamp last_updated = 7;
+}
+
+// 创建租户请求
+message CreateTenantRequest {
+  string name = 1;                  // 租户名称
+  string company = 2;               // 公司名称
+  string email = 3;                 // 联系邮箱
+  TenantPlan plan = 4;              // 订阅计划
+  TenantQuota custom_quota = 5;     // 可选，自定义配额
+}
+
+// 创建租户响应
+message CreateTenantResponse {
+  string tenant_id = 1;
+  TenantPlan plan = 2;
+  TenantQuota quota = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+// 获取租户请求
+message GetTenantRequest {
+  string tenant_id = 1;
+}
+
+// 获取租户响应
+message GetTenantResponse {
+  Tenant tenant = 1;
+}
+
+// 租户详情
+message Tenant {
+  string tenant_id = 1;
+  string name = 2;
+  string company = 3;
+  string email = 4;
+  TenantPlan plan = 5;
+  TenantStatus status = 6;
+  TenantQuota quota = 7;
+  TenantUsage usage = 8;
+  map<string, bool> features = 9;   // 功能开关
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+// 更新租户配额请求
+message UpdateTenantQuotaRequest {
+  string tenant_id = 1;
+  TenantQuota quota = 2;
+}
+
+// 更新租户配额响应
+message UpdateTenantQuotaResponse {
+  bool success = 1;
+  TenantQuota quota = 2;
+  google.protobuf.Timestamp updated_at = 3;
+}
+
+// 获取租户使用情况请求
+message GetTenantUsageRequest {
+  string tenant_id = 1;
+}
+
+// 获取租户使用情况响应
+message GetTenantUsageResponse {
+  TenantUsage usage = 1;
+  TenantQuota quota = 2;
+  float usage_percentage = 3;       // 使用率百分比
+}
+
+// 更新租户功能请求
+message UpdateTenantFeaturesRequest {
+  string tenant_id = 1;
+  map<string, bool> features = 2;
+}
+
+// 更新租户功能响应
+message UpdateTenantFeaturesResponse {
+  bool success = 1;
+  map<string, bool> features = 2;
+}
+
+// 检查配额请求
+message CheckQuotaRequest {
+  string tenant_id = 1;
+  string quota_type = 2;            // users, agents, tokens, storage, tasks, api_calls
+  int64 requested_amount = 3;       // 请求的数量
+}
+
+// 检查配额响应
+message CheckQuotaResponse {
+  bool allowed = 1;                 // 是否允许
+  int64 remaining = 2;              // 剩余配额
+  string reason = 3;                // 拒绝原因
+}

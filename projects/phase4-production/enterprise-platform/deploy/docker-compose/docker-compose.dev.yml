@@ -1,0 +1,456 @@
+version: '3.8'
+
+services:
+  # ==================== 基础设施 ====================
+
+  # PostgreSQL数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: agent-platform-postgres
+    environment:
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: agent123
+      POSTGRES_DB: agent_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-network
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: agent-platform-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-network
+
+  # Consul服务发现
+  consul:
+    image: consul:1.17
+    container_name: agent-platform-consul
+    ports:
+      - "8500:8500"
+      - "8600:8600/udp"
+    command: agent -server -ui -bootstrap-expect=1 -client=0.0.0.0
+    volumes:
+      - consul_data:/consul/data
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-network
+
+  # NATS消息队列
+  nats:
+    image: nats:2.10-alpine
+    container_name: agent-platform-nats
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: -js -m 8222
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-network
+
+  # ==================== 监控栈 ====================
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: agent-platform-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./../../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./../../monitoring/prometheus/rules:/etc/prometheus/rules
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-network
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: agent-platform-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_SERVER_ROOT_URL: http://localhost:3000
+    volumes:
+      - ./../../monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./../../monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-network
+
+  # Jaeger分布式追踪
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    container_name: agent-platform-jaeger
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    environment:
+      COLLECTOR_ZIPKIN_HOST_PORT: :9411
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:14269/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-network
+
+  # ==================== 日志栈 ====================
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: agent-platform-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-network
+
+  # Kibana
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: agent-platform-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-network
+
+  # Logstash
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: agent-platform-logstash
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    environment:
+      LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+    volumes:
+      - ./../../logging/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    depends_on:
+      - elasticsearch
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9600/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent-network
+
+  # ==================== 微服务 ====================
+
+  # Agent服务
+  agent-service:
+    build:
+      context: ../../services/agent
+      dockerfile: Dockerfile
+    container_name: agent-service
+    ports:
+      - "8081:8080"
+      - "9081:9090"
+    environment:
+      SERVICE_NAME: agent-service
+      SERVICE_PORT: 8080
+      GRPC_PORT: 9090
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: agent_db
+      DB_USER: agent
+      DB_PASSWORD: agent123
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      NATS_URL: nats://nats:4222
+      PROMETHEUS_PORT: 9091
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      LOG_LEVEL: debug
+    depends_on:
+      - postgres
+      - redis
+      - consul
+      - nats
+      - jaeger
+    networks:
+      - agent-network
+
+  # Task服务
+  task-service:
+    build:
+      context: ../../services/task
+      dockerfile: Dockerfile
+    container_name: task-service
+    ports:
+      - "8082:8080"
+      - "9082:9090"
+    environment:
+      SERVICE_NAME: task-service
+      SERVICE_PORT: 8080
+      GRPC_PORT: 9090
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: task_db
+      DB_USER: agent
+      DB_PASSWORD: agent123
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      NATS_URL: nats://nats:4222
+      PROMETHEUS_PORT: 9091
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      LOG_LEVEL: debug
+    depends_on:
+      - postgres
+      - redis
+      - consul
+      - nats
+      - jaeger
+    networks:
+      - agent-network
+
+  # Tool服务
+  tool-service:
+    build:
+      context: ../../services/tool
+      dockerfile: Dockerfile
+    container_name: tool-service
+    ports:
+      - "8083:8080"
+      - "9083:9090"
+    environment:
+      SERVICE_NAME: tool-service
+      SERVICE_PORT: 8080
+      GRPC_PORT: 9090
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: tool_db
+      DB_USER: agent
+      DB_PASSWORD: agent123
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      PROMETHEUS_PORT: 9091
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      LOG_LEVEL: debug
+    depends_on:
+      - postgres
+      - redis
+      - consul
+      - jaeger
+    networks:
+      - agent-network
+
+  # User服务
+  user-service:
+    build:
+      context: ../../services/user
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8084:8080"
+      - "9084:9090"
+    environment:
+      SERVICE_NAME: user-service
+      SERVICE_PORT: 8080
+      GRPC_PORT: 9090
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: user_db
+      DB_USER: agent
+      DB_PASSWORD: agent123
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      JWT_SECRET: your-secret-key-change-in-production
+      PROMETHEUS_PORT: 9091
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      LOG_LEVEL: debug
+    depends_on:
+      - postgres
+      - redis
+      - consul
+      - jaeger
+    networks:
+      - agent-network
+
+  # Tenant服务
+  tenant-service:
+    build:
+      context: ../../services/tenant
+      dockerfile: Dockerfile
+    container_name: tenant-service
+    ports:
+      - "8085:8080"
+      - "9085:9090"
+    environment:
+      SERVICE_NAME: tenant-service
+      SERVICE_PORT: 8080
+      GRPC_PORT: 9090
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: tenant_db
+      DB_USER: agent
+      DB_PASSWORD: agent123
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      PROMETHEUS_PORT: 9091
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      LOG_LEVEL: debug
+    depends_on:
+      - postgres
+      - redis
+      - consul
+      - jaeger
+    networks:
+      - agent-network
+
+  # Cost服务
+  cost-service:
+    build:
+      context: ../../services/cost
+      dockerfile: Dockerfile
+    container_name: cost-service
+    ports:
+      - "8086:8080"
+      - "9086:9090"
+    environment:
+      SERVICE_NAME: cost-service
+      SERVICE_PORT: 8080
+      GRPC_PORT: 9090
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: cost_db
+      DB_USER: agent
+      DB_PASSWORD: agent123
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      PROMETHEUS_PORT: 9091
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      LOG_LEVEL: debug
+    depends_on:
+      - postgres
+      - redis
+      - consul
+      - jaeger
+    networks:
+      - agent-network
+
+  # Monitoring服务
+  monitoring-service:
+    build:
+      context: ../../services/monitoring
+      dockerfile: Dockerfile
+    container_name: monitoring-service
+    ports:
+      - "8087:8080"
+      - "9087:9090"
+    environment:
+      SERVICE_NAME: monitoring-service
+      SERVICE_PORT: 8080
+      GRPC_PORT: 9090
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CONSUL_HOST: consul
+      CONSUL_PORT: 8500
+      PROMETHEUS_URL: http://prometheus:9090
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      LOG_LEVEL: debug
+    depends_on:
+      - redis
+      - consul
+      - prometheus
+      - jaeger
+    networks:
+      - agent-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  consul_data:
+  prometheus_data:
+  grafana_data:
+  elasticsearch_data:
+
+networks:
+  agent-network:
+    driver: bridge

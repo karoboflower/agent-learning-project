@@ -1,0 +1,19 @@
+# Cron任务配置 - 日志归档和清理
+
+# 每天凌晨2点执行日志归档
+0 2 * * * /opt/enterprise-platform/monitoring/logging/scripts/archive-logs.sh >> /var/log/log-archive.log 2>&1
+
+# 每周日凌晨3点执行Elasticsearch优化
+0 3 * * 0 curl -X POST "http://localhost:9200/_optimize" >> /var/log/es-optimize.log 2>&1
+
+# 每月1号凌晨4点生成月度日志报告
+0 4 1 * * /opt/enterprise-platform/monitoring/logging/scripts/generate-monthly-report.sh >> /var/log/monthly-report.log 2>&1
+
+# 每小时检查Elasticsearch健康状态
+0 * * * * curl -sf "http://localhost:9200/_cluster/health" || echo "Elasticsearch health check failed at $(date)" >> /var/log/es-health.log
+
+# 每6小时清理Logstash死信队列
+0 */6 * * * find /var/lib/logstash/dead_letter_queue -type f -mtime +7 -delete
+
+# 每天检查索引大小并告警
+0 6 * * * /opt/enterprise-platform/monitoring/logging/scripts/check-index-size.sh >> /var/log/index-size-check.log 2>&1

@@ -1,0 +1,153 @@
+# Filebeat配置文件
+
+# 文件输入
+filebeat.inputs:
+  # 应用日志
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/enterprise-platform/*.log
+      - /var/log/enterprise-platform/*/*.log
+    fields:
+      log_type: application
+      environment: ${ENVIRONMENT:production}
+    fields_under_root: true
+    json.keys_under_root: true
+    json.add_error_key: true
+    json.message_key: message
+    multiline.pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+    multiline.negate: true
+    multiline.match: after
+    close_inactive: 5m
+    clean_inactive: 24h
+    scan_frequency: 10s
+
+  # Docker容器日志
+  - type: container
+    enabled: true
+    paths:
+      - '/var/lib/docker/containers/*/*.log'
+    processors:
+      - add_docker_metadata:
+          host: "unix:///var/run/docker.sock"
+      - decode_json_fields:
+          fields: ["message"]
+          target: ""
+          overwrite_keys: true
+
+  # Kubernetes Pod日志
+  - type: kubernetes
+    enabled: false
+    hints.enabled: true
+    hints.default_config:
+      type: container
+      paths:
+        - /var/log/containers/*${data.kubernetes.container.id}.log
+
+# 处理器
+processors:
+  # 添加主机信息
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+      netinfo.enabled: true
+      cache.ttl: 5m
+
+  # 添加Docker元数据
+  - add_docker_metadata:
+      when.contains.container.id: "*"
+      host: "unix:///var/run/docker.sock"
+      match_fields: ["container.id"]
+
+  # 添加Kubernetes元数据
+  - add_kubernetes_metadata:
+      when.contains.kubernetes.pod.name: "*"
+      host: ${NODE_NAME}
+      matchers:
+        - logs_path:
+            logs_path: "/var/log/containers/"
+
+  # 删除不需要的字段
+  - drop_fields:
+      fields: ["agent.ephemeral_id", "agent.id", "ecs.version", "host.name", "input.type"]
+      ignore_missing: true
+
+  # 重命名字段
+  - rename:
+      fields:
+        - from: "host.hostname"
+          to: "host"
+      ignore_missing: true
+
+  # 添加标签
+  - add_tags:
+      tags: ["enterprise-platform"]
+      when:
+        contains:
+          log_type: "application"
+
+# 输出到Logstash
+output.logstash:
+  hosts: ["logstash:5044"]
+  loadbalance: true
+  compression_level: 3
+  bulk_max_size: 2048
+  worker: 2
+  ttl: 60s
+
+  # 失败重试
+  max_retries: 3
+  backoff.init: 1s
+  backoff.max: 60s
+
+# 输出到Elasticsearch（可选，直接输出）
+# output.elasticsearch:
+#   hosts: ["elasticsearch:9200"]
+#   index: "filebeat-%{[agent.version]}-%{+yyyy.MM.dd}"
+#
+#   # 认证
+#   username: "elastic"
+#   password: "${ELASTICSEARCH_PASSWORD}"
+#
+#   # 批量设置
+#   bulk_max_size: 50
+#
+#   # 生命周期管理
+#   ilm.enabled: true
+#   ilm.rollover_alias: "filebeat"
+#   ilm.pattern: "{now/d}-000001"
+
+# 输出到Kafka（可选）
+# output.kafka:
+#   hosts: ["kafka:9092"]
+#   topic: "filebeat-logs"
+#   partition.round_robin:
+#     reachable_only: true
+#   compression: gzip
+#   max_message_bytes: 1000000
+
+# 监控
+monitoring:
+  enabled: true
+  elasticsearch:
+    hosts: ["elasticsearch:9200"]
+
+# 日志设置
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0644
+
+# 性能设置
+queue.mem:
+  events: 4096
+  flush.min_events: 512
+  flush.timeout: 1s
+
+# HTTP端点
+http:
+  enabled: true
+  host: 0.0.0.0
+  port: 5066

@@ -1,0 +1,195 @@
+syntax = "proto3";
+
+package task;
+
+option go_package = "github.com/agent-learning/enterprise-platform/proto/task";
+
+import "google/protobuf/timestamp.proto";
+
+// 任务服务定义
+service TaskService {
+  // 创建任务
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+
+  // 获取任务
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+
+  // 列出任务
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+
+  // 更新任务状态
+  rpc UpdateTaskStatus(UpdateTaskStatusRequest) returns (UpdateTaskStatusResponse);
+
+  // 取消任务
+  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
+
+  // 获取任务日志
+  rpc GetTaskLogs(GetTaskLogsRequest) returns (GetTaskLogsResponse);
+
+  // 重试任务
+  rpc RetryTask(RetryTaskRequest) returns (RetryTaskResponse);
+}
+
+// 任务类型
+enum TaskType {
+  TASK_TYPE_UNKNOWN = 0;
+  TASK_TYPE_AGENT_EXECUTION = 1;    // Agent执行任务
+  TASK_TYPE_TOOL_EXECUTION = 2;     // 工具执行任务
+  TASK_TYPE_BATCH_PROCESSING = 3;   // 批处理任务
+  TASK_TYPE_SCHEDULED = 4;          // 定时任务
+}
+
+// 任务状态
+enum TaskStatus {
+  TASK_STATUS_UNKNOWN = 0;
+  TASK_STATUS_PENDING = 1;          // 待处理
+  TASK_STATUS_RUNNING = 2;          // 执行中
+  TASK_STATUS_COMPLETED = 3;        // 已完成
+  TASK_STATUS_FAILED = 4;           // 失败
+  TASK_STATUS_CANCELLED = 5;        // 已取消
+}
+
+// 任务优先级
+enum TaskPriority {
+  TASK_PRIORITY_UNKNOWN = 0;
+  TASK_PRIORITY_LOW = 1;
+  TASK_PRIORITY_MEDIUM = 2;
+  TASK_PRIORITY_HIGH = 3;
+  TASK_PRIORITY_URGENT = 4;
+}
+
+// 创建任务请求
+message CreateTaskRequest {
+  string tenant_id = 1;
+  string user_id = 2;
+  string agent_id = 3;              // 可选，指定执行的Agent
+  TaskType type = 4;
+  TaskPriority priority = 5;
+  string title = 6;
+  string description = 7;
+  string input = 8;                 // JSON格式的输入数据
+  map<string, string> metadata = 9;
+}
+
+// 创建任务响应
+message CreateTaskResponse {
+  string task_id = 1;
+  TaskStatus status = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
+// 获取任务请求
+message GetTaskRequest {
+  string task_id = 1;
+  string tenant_id = 2;
+}
+
+// 获取任务响应
+message GetTaskResponse {
+  Task task = 1;
+}
+
+// 任务详情
+message Task {
+  string task_id = 1;
+  string tenant_id = 2;
+  string user_id = 3;
+  string agent_id = 4;
+  TaskType type = 5;
+  TaskPriority priority = 6;
+  TaskStatus status = 7;
+  string title = 8;
+  string description = 9;
+  string input = 10;
+  string output = 11;               // JSON格式的输出数据
+  string error = 12;                // 错误信息
+  int32 retry_count = 13;           // 重试次数
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp started_at = 15;
+  google.protobuf.Timestamp completed_at = 16;
+  map<string, string> metadata = 17;
+}
+
+// 列出任务请求
+message ListTasksRequest {
+  string tenant_id = 1;
+  string user_id = 2;               // 可选，筛选特定用户的任务
+  string agent_id = 3;              // 可选，筛选特定Agent的任务
+  TaskStatus status_filter = 4;     // 可选，按状态筛选
+  TaskType type_filter = 5;         // 可选，按类型筛选
+  int32 page = 6;
+  int32 page_size = 7;
+  string sort_by = 8;               // 排序字段：created_at, priority
+  string sort_order = 9;            // asc, desc
+}
+
+// 列出任务响应
+message ListTasksResponse {
+  repeated Task tasks = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// 更新任务状态请求
+message UpdateTaskStatusRequest {
+  string task_id = 1;
+  string tenant_id = 2;
+  TaskStatus status = 3;
+  string output = 4;                // 可选，任务输出
+  string error = 5;                 // 可选，错误信息
+}
+
+// 更新任务状态响应
+message UpdateTaskStatusResponse {
+  bool success = 1;
+  Task task = 2;
+}
+
+// 取消任务请求
+message CancelTaskRequest {
+  string task_id = 1;
+  string tenant_id = 2;
+  string reason = 3;
+}
+
+// 取消任务响应
+message CancelTaskResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 获取任务日志请求
+message GetTaskLogsRequest {
+  string task_id = 1;
+  string tenant_id = 2;
+  int32 limit = 3;                  // 日志条数限制
+}
+
+// 获取任务日志响应
+message GetTaskLogsResponse {
+  repeated TaskLog logs = 1;
+}
+
+// 任务日志
+message TaskLog {
+  string log_id = 1;
+  string task_id = 2;
+  string level = 3;                 // INFO, WARN, ERROR
+  string message = 4;
+  map<string, string> context = 5;
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+// 重试任务请求
+message RetryTaskRequest {
+  string task_id = 1;
+  string tenant_id = 2;
+}
+
+// 重试任务响应
+message RetryTaskResponse {
+  bool success = 1;
+  string new_task_id = 2;           // 新任务ID
+  google.protobuf.Timestamp created_at = 3;
+}

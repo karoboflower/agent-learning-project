@@ -1,0 +1,45 @@
+{
+  "service_strategies": [
+    {
+      "service": "agent-service",
+      "type": "probabilistic",
+      "param": 1.0,
+      "operation_strategies": [
+        {
+          "operation": "/api/v1/agent/execute",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "operation": "/api/v1/agent/health",
+          "type": "probabilistic",
+          "param": 0.1
+        }
+      ]
+    },
+    {
+      "service": "task-service",
+      "type": "probabilistic",
+      "param": 1.0
+    },
+    {
+      "service": "cost-service",
+      "type": "probabilistic",
+      "param": 0.5
+    },
+    {
+      "service": "tenant-service",
+      "type": "probabilistic",
+      "param": 0.8
+    },
+    {
+      "service": "auth-service",
+      "type": "probabilistic",
+      "param": 0.3
+    }
+  ],
+  "default_strategy": {
+    "type": "probabilistic",
+    "param": 0.5
+  }
+}

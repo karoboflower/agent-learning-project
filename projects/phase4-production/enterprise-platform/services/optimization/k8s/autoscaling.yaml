@@ -1,0 +1,449 @@
+# Kubernetes自动扩缩容配置
+
+## 水平Pod自动扩缩容 (HPA)
+
+### Agent服务 HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: agent-service-hpa
+  namespace: enterprise-platform
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: agent-service
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "1000"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+      - type: Pods
+        value: 4
+        periodSeconds: 30
+      selectPolicy: Max
+
+---
+### Task服务 HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: task-service-hpa
+  namespace: enterprise-platform
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: task-service
+  minReplicas: 3
+  maxReplicas: 15
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 85
+  - type: Pods
+    pods:
+      metric:
+        name: task_queue_length
+      target:
+        type: AverageValue
+        averageValue: "100"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 30
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+
+---
+### Cost服务 HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cost-service-hpa
+  namespace: enterprise-platform
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cost-service
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+## 垂直Pod自动扩缩容 (VPA)
+
+### Agent服务 VPA
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: agent-service-vpa
+  namespace: enterprise-platform
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: agent-service
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: agent-service
+      minAllowed:
+        cpu: 100m
+        memory: 128Mi
+      maxAllowed:
+        cpu: 2000m
+        memory: 4Gi
+      controlledResources:
+      - cpu
+      - memory
+
+---
+## 集群自动扩缩容 (Cluster Autoscaler)
+
+### 节点池配置示例 (GKE)
+```yaml
+gcloud container node-pools create agent-workload-pool \
+  --cluster=enterprise-platform-cluster \
+  --enable-autoscaling \
+  --min-nodes=2 \
+  --max-nodes=20 \
+  --machine-type=n2-standard-4 \
+  --disk-size=100 \
+  --num-nodes=3
+```
+
+### 节点池配置示例 (AWS EKS)
+```yaml
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: enterprise-platform-cluster
+  region: us-west-2
+nodeGroups:
+  - name: agent-workload-ng
+    instanceType: t3.xlarge
+    minSize: 2
+    maxSize: 20
+    desiredCapacity: 3
+    volumeSize: 100
+    labels:
+      workload: agent
+    tags:
+      autoscaling: enabled
+```
+
+---
+## Pod优先级和抢占
+
+### 高优先级类
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000000
+globalDefault: false
+description: "High priority for critical services"
+
+---
+### 中等优先级类
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medium-priority
+value: 100000
+globalDefault: true
+description: "Medium priority for standard services"
+
+---
+### 低优先级类
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: low-priority
+value: 1000
+globalDefault: false
+description: "Low priority for background tasks"
+
+---
+## Pod Disruption Budget (PDB)
+
+### Agent服务 PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-service-pdb
+  namespace: enterprise-platform
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: agent-service
+
+---
+### Task服务 PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: task-service-pdb
+  namespace: enterprise-platform
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: task-service
+
+---
+## 资源配额
+
+### 命名空间资源配额
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: enterprise-platform-quota
+  namespace: enterprise-platform
+spec:
+  hard:
+    requests.cpu: "100"
+    requests.memory: 200Gi
+    limits.cpu: "200"
+    limits.memory: 400Gi
+    pods: "100"
+    services: "50"
+    persistentvolumeclaims: "20"
+
+---
+## LimitRange
+
+### 命名空间资源限制
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: enterprise-platform-limits
+  namespace: enterprise-platform
+spec:
+  limits:
+  - max:
+      cpu: "4"
+      memory: 8Gi
+    min:
+      cpu: 100m
+      memory: 128Mi
+    default:
+      cpu: "1"
+      memory: 1Gi
+    defaultRequest:
+      cpu: 500m
+      memory: 512Mi
+    type: Container
+  - max:
+      cpu: "8"
+      memory: 16Gi
+    min:
+      cpu: 100m
+      memory: 128Mi
+    type: Pod
+
+---
+## KEDA (Kubernetes Event-Driven Autoscaling)
+
+### 基于队列长度的扩缩容
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: task-queue-scaler
+  namespace: enterprise-platform
+spec:
+  scaleTargetRef:
+    name: task-service
+  minReplicaCount: 3
+  maxReplicaCount: 20
+  pollingInterval: 15
+  cooldownPeriod: 300
+  triggers:
+  - type: nats-jetstream
+    metadata:
+      natsServerMonitoringEndpoint: "nats://nats:4222"
+      stream: "tasks"
+      consumer: "task-processor"
+      lagThreshold: "100"
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus:9090
+      metricName: task_queue_length
+      threshold: "100"
+      query: sum(task_queue_length{service="task-service"})
+
+---
+### 基于成本的扩缩容
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: cost-aware-scaler
+  namespace: enterprise-platform
+spec:
+  scaleTargetRef:
+    name: agent-service
+  minReplicaCount: 2
+  maxReplicaCount: 10
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus:9090
+      metricName: cost_per_request
+      threshold: "0.5"
+      query: rate(total_cost[5m]) / rate(total_requests[5m])
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus:9090
+      metricName: budget_utilization
+      threshold: "80"
+      query: (budget_spent / budget_total) * 100
+
+---
+## 使用说明
+
+### 1. 应用HPA配置
+```bash
+kubectl apply -f hpa-agent-service.yaml
+kubectl apply -f hpa-task-service.yaml
+kubectl apply -f hpa-cost-service.yaml
+```
+
+### 2. 查看HPA状态
+```bash
+kubectl get hpa -n enterprise-platform
+kubectl describe hpa agent-service-hpa -n enterprise-platform
+```
+
+### 3. 应用VPA配置
+```bash
+kubectl apply -f vpa-agent-service.yaml
+```
+
+### 4. 查看VPA状态
+```bash
+kubectl get vpa -n enterprise-platform
+kubectl describe vpa agent-service-vpa -n enterprise-platform
+```
+
+### 5. 应用PDB配置
+```bash
+kubectl apply -f pdb-agent-service.yaml
+kubectl apply -f pdb-task-service.yaml
+```
+
+### 6. 查看PDB状态
+```bash
+kubectl get pdb -n enterprise-platform
+```
+
+### 7. 应用资源配额
+```bash
+kubectl apply -f resource-quota.yaml
+kubectl apply -f limit-range.yaml
+```
+
+### 8. 查看资源使用
+```bash
+kubectl describe resourcequota -n enterprise-platform
+kubectl top pods -n enterprise-platform
+kubectl top nodes
+```
+
+---
+## 最佳实践
+
+### 1. HPA配置
+- 合理设置`minReplicas`和`maxReplicas`
+- 使用多个指标（CPU + 内存 + 自定义指标）
+- 配置`behavior`控制扩缩容速度
+- 设置稳定窗口避免频繁扩缩容
+
+### 2. 资源请求和限制
+- 始终设置`requests`和`limits`
+- `requests`基于平均负载设置
+- `limits`基于峰值负载设置（通常是requests的1.5-2倍）
+- 避免设置过大的limits导致资源浪费
+
+### 3. 扩缩容策略
+- 快速扩容：应对突发流量
+- 缓慢缩容：避免服务抖动
+- 基于多个指标：更准确的扩缩容决策
+- 预留缓冲：避免达到上限
+
+### 4. 监控和告警
+- 监控HPA指标和扩缩容事件
+- 设置扩缩容告警
+- 定期审查扩缩容行为
+- 优化扩缩容阈值
+
+### 5. 成本优化
+- 使用Spot/Preemptible实例
+- 合理设置节点池大小
+- 实施资源配额和限制
+- 定期清理未使用资源

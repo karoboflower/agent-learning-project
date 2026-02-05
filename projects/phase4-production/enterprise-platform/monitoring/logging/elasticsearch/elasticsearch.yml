@@ -1,0 +1,187 @@
+# Elasticsearch配置文件
+
+cluster.name: "enterprise-platform-logs"
+node.name: "es-node-1"
+
+# 网络配置
+network.host: 0.0.0.0
+http.port: 9200
+transport.port: 9300
+
+# 发现配置
+discovery.type: single-node
+# discovery.seed_hosts: ["es-node-1", "es-node-2", "es-node-3"]
+# cluster.initial_master_nodes: ["es-node-1"]
+
+# 路径配置
+path.data: /usr/share/elasticsearch/data
+path.logs: /usr/share/elasticsearch/logs
+
+# 内存配置
+bootstrap.memory_lock: true
+
+# 安全配置
+xpack.security.enabled: false
+xpack.security.transport.ssl.enabled: false
+xpack.security.http.ssl.enabled: false
+
+# 监控配置
+xpack.monitoring.enabled: true
+xpack.monitoring.collection.enabled: true
+
+# 索引配置
+action.auto_create_index: true
+action.destructive_requires_name: true
+
+# 性能配置
+indices.memory.index_buffer_size: 30%
+indices.queries.cache.size: 10%
+indices.fielddata.cache.size: 20%
+
+# 索引模板 - 应用日志
+# PUT _index_template/app-logs-template
+{
+  "index_patterns": ["app-logs-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1,
+      "index.refresh_interval": "5s",
+      "index.translog.durability": "async",
+      "index.translog.sync_interval": "30s",
+      "index.lifecycle.name": "app-logs-policy",
+      "index.lifecycle.rollover_alias": "app-logs"
+    },
+    "mappings": {
+      "properties": {
+        "timestamp": {
+          "type": "date",
+          "format": "strict_date_optional_time||epoch_millis"
+        },
+        "level": {
+          "type": "keyword"
+        },
+        "logger": {
+          "type": "keyword"
+        },
+        "message": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "service": {
+          "type": "keyword"
+        },
+        "version": {
+          "type": "keyword"
+        },
+        "env": {
+          "type": "keyword"
+        },
+        "tenant_id": {
+          "type": "keyword"
+        },
+        "user_id": {
+          "type": "keyword"
+        },
+        "request_id": {
+          "type": "keyword"
+        },
+        "trace_id": {
+          "type": "keyword"
+        },
+        "span_id": {
+          "type": "keyword"
+        },
+        "method": {
+          "type": "keyword"
+        },
+        "path": {
+          "type": "keyword"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "duration": {
+          "type": "long"
+        },
+        "error": {
+          "type": "text"
+        },
+        "stacktrace": {
+          "type": "text"
+        },
+        "caller": {
+          "type": "keyword"
+        }
+      }
+    }
+  },
+  "priority": 500,
+  "version": 1
+}
+
+# 索引生命周期策略
+# PUT _ilm/policy/app-logs-policy
+{
+  "policy": {
+    "phases": {
+      "hot": {
+        "min_age": "0ms",
+        "actions": {
+          "rollover": {
+            "max_size": "50gb",
+            "max_age": "1d",
+            "max_docs": 100000000
+          },
+          "set_priority": {
+            "priority": 100
+          }
+        }
+      },
+      "warm": {
+        "min_age": "7d",
+        "actions": {
+          "set_priority": {
+            "priority": 50
+          },
+          "forcemerge": {
+            "max_num_segments": 1
+          },
+          "shrink": {
+            "number_of_shards": 1
+          }
+        }
+      },
+      "cold": {
+        "min_age": "30d",
+        "actions": {
+          "set_priority": {
+            "priority": 0
+          },
+          "freeze": {}
+        }
+      },
+      "delete": {
+        "min_age": "90d",
+        "actions": {
+          "delete": {}
+        }
+      }
+    }
+  }
+}
+
+# 创建初始索引
+# PUT app-logs-000001
+{
+  "aliases": {
+    "app-logs": {
+      "is_write_index": true
+    }
+  }
+}

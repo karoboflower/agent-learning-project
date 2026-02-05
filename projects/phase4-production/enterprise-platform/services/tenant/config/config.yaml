@@ -1,0 +1,45 @@
+server:
+  port: 8080
+  grpc_port: 9090
+  read_timeout: 30s
+  write_timeout: 30s
+
+database:
+  host: ${DB_HOST:postgres}
+  port: ${DB_PORT:5432}
+  name: ${DB_NAME:tenant_db}
+  user: ${DB_USER:agent}
+  password: ${DB_PASSWORD:agent123}
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime: 5m
+
+redis:
+  host: ${REDIS_HOST:redis}
+  port: ${REDIS_PORT:6379}
+  password: ${REDIS_PASSWORD:}
+  db: 0
+  pool_size: 10
+
+consul:
+  host: ${CONSUL_HOST:consul}
+  port: ${CONSUL_PORT:8500}
+  service_name: tenant-service
+  health_check_interval: 10s
+
+isolation:
+  strategy: row  # database, schema, or row
+
+log:
+  level: ${LOG_LEVEL:info}
+  format: ${LOG_FORMAT:json}
+
+metrics:
+  enabled: true
+  port: 9091
+  path: /metrics
+
+tracing:
+  enabled: true
+  jaeger_endpoint: ${JAEGER_ENDPOINT:http://jaeger:14268/api/traces}
+  sample_rate: 0.1

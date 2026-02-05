@@ -1,0 +1,181 @@
+syntax = "proto3";
+
+package agent;
+
+option go_package = "github.com/agent-learning/enterprise-platform/proto/agent";
+
+import "google/protobuf/timestamp.proto";
+
+// Agent服务定义
+service AgentService {
+  // 创建Agent
+  rpc CreateAgent(CreateAgentRequest) returns (CreateAgentResponse);
+
+  // 执行任务（流式响应）
+  rpc ExecuteTask(ExecuteTaskRequest) returns (stream ExecuteTaskResponse);
+
+  // 获取Agent状态
+  rpc GetAgentStatus(GetAgentStatusRequest) returns (GetAgentStatusResponse);
+
+  // 停止Agent
+  rpc StopAgent(StopAgentRequest) returns (StopAgentResponse);
+
+  // 更新Agent配置
+  rpc UpdateAgent(UpdateAgentRequest) returns (UpdateAgentResponse);
+
+  // 删除Agent
+  rpc DeleteAgent(DeleteAgentRequest) returns (DeleteAgentResponse);
+
+  // 列出Agent
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+}
+
+// Agent状态
+enum AgentStatus {
+  AGENT_STATUS_UNKNOWN = 0;
+  AGENT_STATUS_IDLE = 1;
+  AGENT_STATUS_RUNNING = 2;
+  AGENT_STATUS_ERROR = 3;
+  AGENT_STATUS_STOPPED = 4;
+}
+
+// Agent配置
+message AgentConfig {
+  string model = 1;                 // 模型名称：gpt-4, claude-3, etc
+  string system_prompt = 2;         // 系统提示词
+  int32 max_iterations = 3;         // 最大迭代次数
+  int32 max_tokens = 4;             // 最大token数
+  float temperature = 5;            // 温度参数
+  repeated string tools = 6;        // 可用工具列表
+}
+
+// 消息
+message Message {
+  string role = 1;                  // user, assistant, system
+  string content = 2;               // 消息内容
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+// 创建Agent请求
+message CreateAgentRequest {
+  string tenant_id = 1;
+  string user_id = 2;
+  string name = 3;
+  AgentConfig config = 4;
+}
+
+// 创建Agent响应
+message CreateAgentResponse {
+  string agent_id = 1;
+  AgentStatus status = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
+// 执行任务请求
+message ExecuteTaskRequest {
+  string agent_id = 1;
+  string tenant_id = 2;
+  string user_id = 3;
+  string task = 4;                  // 任务描述
+  map<string, string> context = 5;  // 上下文信息
+}
+
+// 执行任务响应（流式）
+message ExecuteTaskResponse {
+  enum ChunkType {
+    CHUNK_TYPE_UNKNOWN = 0;
+    CHUNK_TYPE_THINKING = 1;        // 思考过程
+    CHUNK_TYPE_ACTION = 2;          // 执行动作
+    CHUNK_TYPE_RESULT = 3;          // 最终结果
+    CHUNK_TYPE_ERROR = 4;           // 错误信息
+  }
+
+  ChunkType type = 1;
+  string content = 2;
+  string action = 3;                // 动作名称
+  map<string, string> metadata = 4; // 元数据
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+// 获取Agent状态请求
+message GetAgentStatusRequest {
+  string agent_id = 1;
+  string tenant_id = 2;
+}
+
+// 获取Agent状态响应
+message GetAgentStatusResponse {
+  string agent_id = 1;
+  string name = 2;
+  AgentStatus status = 3;
+  AgentConfig config = 4;
+  repeated Message context = 5;     // 上下文历史
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+// 停止Agent请求
+message StopAgentRequest {
+  string agent_id = 1;
+  string tenant_id = 2;
+  string reason = 3;
+}
+
+// 停止Agent响应
+message StopAgentResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 更新Agent请求
+message UpdateAgentRequest {
+  string agent_id = 1;
+  string tenant_id = 2;
+  AgentConfig config = 3;
+}
+
+// 更新Agent响应
+message UpdateAgentResponse {
+  bool success = 1;
+  AgentConfig config = 2;
+  google.protobuf.Timestamp updated_at = 3;
+}
+
+// 删除Agent请求
+message DeleteAgentRequest {
+  string agent_id = 1;
+  string tenant_id = 2;
+}
+
+// 删除Agent响应
+message DeleteAgentResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// 列出Agent请求
+message ListAgentsRequest {
+  string tenant_id = 1;
+  string user_id = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  AgentStatus status_filter = 5;
+}
+
+// 列出Agent响应
+message ListAgentsResponse {
+  repeated AgentInfo agents = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// Agent信息
+message AgentInfo {
+  string agent_id = 1;
+  string name = 2;
+  string model = 3;
+  AgentStatus status = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp last_active_at = 6;
+}

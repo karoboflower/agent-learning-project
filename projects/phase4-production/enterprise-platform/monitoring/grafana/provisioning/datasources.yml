@@ -1,0 +1,59 @@
+apiVersion: 1
+
+datasources:
+  # Prometheus数据源
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST
+    editable: false
+
+  # Thanos Query（长期存储）
+  - name: Thanos
+    type: prometheus
+    access: proxy
+    url: http://thanos-query:9090
+    isDefault: false
+    jsonData:
+      timeInterval: 1m
+      httpMethod: POST
+    editable: false
+
+  # Loki（日志）
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: false
+    jsonData:
+      maxLines: 1000
+    editable: false
+
+  # Jaeger���追踪）
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger-query:16686
+    isDefault: false
+    editable: false
+
+  # PostgreSQL（业务数据）
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: enterprise_platform
+    user: ${POSTGRES_USER}
+    secureJsonData:
+      password: ${POSTGRES_PASSWORD}
+    isDefault: false
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 10
+      maxIdleConns: 10
+      connMaxLifetime: 14400
+    editable: false

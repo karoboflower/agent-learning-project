@@ -1,0 +1,283 @@
+groups:
+  - name: service_availability
+    interval: 30s
+    rules:
+      # 服务可用性告警
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been down for more than 1 minute"
+          runbook_url: "https://wiki.example.com/runbooks/service-down"
+
+      # HTTP高错误率
+      - alert: HighHTTPErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m])) by (job, tenant_id)
+            /
+            sum(rate(http_requests_total[5m])) by (job, tenant_id)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          category: errors
+        annotations:
+          summary: "High HTTP error rate for {{ $labels.job }}"
+          description: "{{ $labels.job }} has error rate of {{ $value | humanizePercentage }} for tenant {{ $labels.tenant_id }}"
+
+      # HTTP非常高的错误率
+      - alert: CriticalHTTPErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m])) by (job, tenant_id)
+            /
+            sum(rate(http_requests_total[5m])) by (job, tenant_id)
+          ) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          category: errors
+        annotations:
+          summary: "Critical HTTP error rate for {{ $labels.job }}"
+          description: "{{ $labels.job }} has critical error rate of {{ $value | humanizePercentage }} for tenant {{ $labels.tenant_id }}"
+
+  - name: performance
+    interval: 30s
+    rules:
+      # 高响应时间
+      - alert: HighResponseTime
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (job, le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High response time for {{ $labels.job }}"
+          description: "{{ $labels.job }} P95 response time is {{ $value }}s"
+
+      # Agent执行时间过长
+      - alert: SlowAgentExecution
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(agent_execution_duration_seconds_bucket[5m])) by (agent_id, tenant_id, le)
+          ) > 60
+        for: 10m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Slow agent execution for {{ $labels.agent_id }}"
+          description: "Agent {{ $labels.agent_id }} P95 execution time is {{ $value }}s for tenant {{ $labels.tenant_id }}"
+
+      # 任务队列积压
+      - alert: TaskQueueBacklog
+        expr: task_queue_length > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Task queue backlog for {{ $labels.priority }} priority"
+          description: "Task queue has {{ $value }} tasks waiting for tenant {{ $labels.tenant_id }}"
+
+      # 缓存命中率低
+      - alert: LowCacheHitRate
+        expr: |
+          (
+            sum(rate(cache_hits_total[5m])) by (cache_name, tenant_id)
+            /
+            (sum(rate(cache_hits_total[5m])) by (cache_name, tenant_id) + sum(rate(cache_misses_total[5m])) by (cache_name, tenant_id))
+          ) < 0.5
+        for: 10m
+        labels:
+          severity: info
+          category: performance
+        annotations:
+          summary: "Low cache hit rate for {{ $labels.cache_name }}"
+          description: "Cache {{ $labels.cache_name }} has hit rate of {{ $value | humanizePercentage }} for tenant {{ $labels.tenant_id }}"
+
+  - name: resources
+    interval: 30s
+    rules:
+      # CPU使用率高
+      - alert: HighCPUUsage
+        expr: cpu_usage_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High CPU usage for {{ $labels.service }}"
+          description: "{{ $labels.service }} CPU usage is {{ $value }}%"
+
+      # 内存使用率高
+      - alert: HighMemoryUsage
+        expr: |
+          (memory_usage_bytes{type="heap_inuse"} / memory_usage_bytes{type="heap_sys"}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High memory usage for {{ $labels.service }}"
+          description: "{{ $labels.service }} memory usage is {{ $value }}%"
+
+      # Goroutine泄漏
+      - alert: GoroutineLeak
+        expr: goroutines_active > 10000
+        for: 10m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "Possible goroutine leak"
+          description: "Number of goroutines is {{ $value }}"
+
+      # 数据库连接池耗尽
+      - alert: DatabaseConnectionPoolExhausted
+        expr: |
+          db_connections_active / (db_connections_active + db_connections_idle) > 0.9
+        for: 5m
+        labels:
+          severity: critical
+          category: resources
+        annotations:
+          summary: "Database connection pool nearly exhausted for {{ $labels.database }}"
+          description: "{{ $labels.database }} connection pool is {{ $value | humanizePercentage }} utilized"
+
+  - name: cost
+    interval: 1m
+    rules:
+      # 成本预算利用率高
+      - alert: HighCostBudgetUtilization
+        expr: cost_budget_utilization_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: cost
+        annotations:
+          summary: "High cost budget utilization for tenant {{ $labels.tenant_id }}"
+          description: "Tenant {{ $labels.tenant_id }} has used {{ $value }}% of {{ $labels.period }} budget"
+
+      # 成本预算即将耗尽
+      - alert: CostBudgetNearlyExhausted
+        expr: cost_budget_utilization_percent > 95
+        for: 1m
+        labels:
+          severity: critical
+          category: cost
+        annotations:
+          summary: "Cost budget nearly exhausted for tenant {{ $labels.tenant_id }}"
+          description: "Tenant {{ $labels.tenant_id }} has used {{ $value }}% of {{ $labels.period }} budget"
+
+      # 单请求成本过高
+      - alert: HighCostPerRequest
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(cost_per_request_usd_bucket[5m])) by (service, tenant_id, le)
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+          category: cost
+        annotations:
+          summary: "High cost per request for {{ $labels.service }}"
+          description: "{{ $labels.service }} P95 cost per request is ${{ $value }} for tenant {{ $labels.tenant_id }}"
+
+  - name: business
+    interval: 1m
+    rules:
+      # Agent执行失败率高
+      - alert: HighAgentFailureRate
+        expr: |
+          (
+            sum(rate(agent_executions_total{status="failed"}[5m])) by (agent_id, tenant_id)
+            /
+            sum(rate(agent_executions_total[5m])) by (agent_id, tenant_id)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "High agent failure rate for {{ $labels.agent_id }}"
+          description: "Agent {{ $labels.agent_id }} has failure rate of {{ $value | humanizePercentage }} for tenant {{ $labels.tenant_id }}"
+
+      # 任务失败率高
+      - alert: HighTaskFailureRate
+        expr: |
+          (
+            sum(rate(tasks_failed_total[5m])) by (task_type, tenant_id)
+            /
+            sum(rate(tasks_created_total[5m])) by (task_type, tenant_id)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "High task failure rate for {{ $labels.task_type }}"
+          description: "Task type {{ $labels.task_type }} has failure rate of {{ $value | humanizePercentage }} for tenant {{ $labels.tenant_id }}"
+
+      # 租户配额即将耗尽
+      - alert: TenantQuotaNearLimit
+        expr: tenant_quota_usage_percent > 90
+        for: 5m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Tenant quota near limit for {{ $labels.tenant_id }}"
+          description: "Tenant {{ $labels.tenant_id }} has used {{ $value }}% of {{ $labels.quota_type }} quota"
+
+  - name: dependencies
+    interval: 30s
+    rules:
+      # 数据库查询慢
+      - alert: SlowDatabaseQueries
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(db_query_duration_seconds_bucket[5m])) by (database, query_type, le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: dependencies
+        annotations:
+          summary: "Slow database queries for {{ $labels.database }}"
+          description: "{{ $labels.database }} {{ $labels.query_type }} P95 query time is {{ $value }}s"
+
+      # 消息队列消费延迟
+      - alert: MessageQueueConsumerLag
+        expr: mq_queue_depth > 10000
+        for: 5m
+        labels:
+          severity: warning
+          category: dependencies
+        annotations:
+          summary: "Message queue consumer lag for {{ $labels.queue }}"
+          description: "Queue {{ $labels.queue }} has {{ $value }} messages pending"
+
+      # 消息处理失败率高
+      - alert: HighMessageProcessingFailureRate
+        expr: |
+          (
+            sum(rate(mq_messages_failed_total[5m])) by (queue, tenant_id)
+            /
+            sum(rate(mq_messages_consumed_total[5m])) by (queue, tenant_id)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          category: dependencies
+        annotations:
+          summary: "High message processing failure rate for {{ $labels.queue }}"
+          description: "Queue {{ $labels.queue }} has failure rate of {{ $value | humanizePercentage }} for tenant {{ $labels.tenant_id }}"

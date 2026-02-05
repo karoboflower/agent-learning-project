@@ -1,0 +1,127 @@
+# Jaeger All-in-One 配置
+
+# 日志配置
+log-level: info
+
+# Collector配置
+collector:
+  # HTTP端口
+  http-server:
+    host-port: :14268
+
+  # gRPC端口
+  grpc-server:
+    host-port: :14250
+
+  # Zipkin兼容端口
+  zipkin:
+    host-port: :9411
+
+  # 队列配置
+  queue:
+    num-workers: 50
+    queue-size: 2000
+
+# Agent配置
+agent:
+  # Compact Thrift协议
+  compact:
+    server-host-port: :6831
+
+  # Binary Thrift协议
+  binary:
+    server-host-port: :6832
+
+  # HTTP配置
+  http-server:
+    host-port: :5778
+
+# Query配置
+query:
+  # UI端口
+  http-server:
+    host-port: :16686
+
+  # gRPC端口
+  grpc-server:
+    host-port: :16685
+
+  # 最大追踪回溯时间
+  max-clock-skew-adjustment: 0s
+
+  # UI配置
+  ui:
+    # 基础路径
+    base-path: /
+
+    # 依赖图配置
+    dependencies:
+      menu-enabled: true
+
+# 存储配置
+storage:
+  # 存储类��: memory, cassandra, elasticsearch, kafka
+  type: elasticsearch
+
+  # Elasticsearch配置
+  elasticsearch:
+    # 服务器URL
+    server-urls: http://elasticsearch:9200
+
+    # 索引前缀
+    index-prefix: jaeger
+
+    # 分片数
+    num-shards: 5
+
+    # 副本数
+    num-replicas: 1
+
+    # 批量大小
+    bulk-size: 5000000
+
+    # 批量workers
+    bulk-workers: 1
+
+    # 批量刷新间隔
+    bulk-flush-interval: 200ms
+
+    # 标签keys为字段
+    tags-as-fields:
+      all: false
+      include: http.status_code,error,tenant.id,user.id,agent.id
+
+    # 索引日期分隔符
+    index-date-separator: "-"
+
+    # 启用sniffing
+    sniffer: false
+
+    # 超时设置
+    timeout: 10s
+
+    # 归档配置
+    archive:
+      enabled: true
+      index-prefix: jaeger-archive
+
+# 采样配置
+sampling:
+  # 默认采样策略
+  strategies-file: /etc/jaeger/sampling-strategies.json
+
+# 监控配置
+metrics:
+  # 后端: prometheus, expvar
+  backend: prometheus
+
+  # HTTP端口
+  http-route: /metrics
+
+# 追踪配置
+self-tracing:
+  # 启用自我追踪
+  enabled: false
+
+  # 采样率
+  sampling-rate: 1.0
